@@ -16,31 +16,27 @@ jobs:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      # Java setup
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: '17'
 
-      # Build project
+      # Build WAR file
       - name: Build project
         run: mvn clean install -DskipTests
 
-      # Run tests
-      - name: Maven test
+      - name: Run tests
         run: mvn test
 
-      # Checkstyle
       - name: Checkstyle
         run: mvn checkstyle:checkstyle
 
-      # Setup Sonar Scanner
+      # Sonar setup
       - name: Setup Sonar Scanner
         uses: warchant/setup-sonar-scanner@v7
 
-      # Sonar Scan
-      - name: SonarQube Scan
+      - name: Sonar Scan
         run: |
           sonar-scanner \
             -Dsonar.host.url=https://sonarcloud.io \
@@ -53,15 +49,14 @@ jobs:
             -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml \
             -Dsonar.java.binaries=target/classes
 
-      # ✅ Quality Gate (FIXED properly)
-      - name: SonarQube Quality Gate check
+      - name: Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@master
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
 
-  BUILD_AND_PUBLISH:
+  BUILD_AND_PUSH:
     needs: Testing
     runs-on: ubuntu-latest
 
@@ -69,7 +64,7 @@ jobs:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      # ✅ AWS credentials (FIX for your error)
+      # AWS auth
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -77,22 +72,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ✅ Login to ECR (FIX for your error)
+      # Login to ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ✅ Build Docker image
+      # Build Docker image
       - name: Build Docker image
-        run: |
-          docker build -t $ECR_REPOSITORY .
+        run: docker build -t $ECR_REPOSITORY .
 
-      # ✅ Tag Docker image
+      # Tag image
       - name: Tag Docker image
         run: |
           docker tag $ECR_REPOSITORY:latest \
           ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
 
-      # ✅ Push to ECR
+      # Push image
       - name: Push Docker image
         run: |
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
