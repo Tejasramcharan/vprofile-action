@@ -56,37 +56,22 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
 
-  BUILD_AND_PUSH:
+  BUILD_AND_PUBLISH:   
     needs: Testing
     runs-on: ubuntu-latest
-
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      # AWS auth
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Build & Upload image to ECR
+        uses: appleboy/docker-ecr-action@master
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      # Login to ECR
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Build Docker image
-      - name: Build Docker image
-        run: docker build -t $ECR_REPOSITORY .
-
-      # Tag image
-      - name: Tag Docker image
-        run: |
-          docker tag $ECR_REPOSITORY:latest \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
-
-      # Push image
-      - name: Push Docker image
-        run: |
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
+         access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+         secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+         registry: ${{ secrets.REGISTRY }}
+         repo: ${{ env.ECR_REPOSITORY }}
+         region: ${{ env.AWS_REGION }}
+         tags: latest,${{ github.run_number }}
+         daemon_off: false
+         dockerfile: ./Dockerfile
+         context: ./
