@@ -16,14 +16,14 @@ jobs:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      # Set Java (use 17 for build, Sonar works fine)
+      # Java setup
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: '17'
 
-      # Build project (IMPORTANT)
+      # Build project
       - name: Build project
         run: mvn clean install -DskipTests
 
@@ -31,7 +31,7 @@ jobs:
       - name: Maven test
         run: mvn test
 
-      # Checkstyle report
+      # Checkstyle
       - name: Checkstyle
         run: mvn checkstyle:checkstyle
 
@@ -39,11 +39,11 @@ jobs:
       - name: Setup Sonar Scanner
         uses: warchant/setup-sonar-scanner@v7
 
-      # Run Sonar Scan
+      # Sonar Scan
       - name: SonarQube Scan
         run: |
           sonar-scanner \
-            -Dsonar.host.url=${{ secrets.SONAR_URL }} \
+            -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
@@ -53,29 +53,46 @@ jobs:
             -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml \
             -Dsonar.java.binaries=target/classes
 
-      # Quality Gate Check
-      
+      # ✅ Quality Gate (FIXED properly)
+      - name: SonarQube Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@master
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
-  BUILD_AND_PUBLISH:   
+          SONAR_HOST_URL: https://sonarcloud.io
+
+  BUILD_AND_PUBLISH:
     needs: Testing
     runs-on: ubuntu-latest
+
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      - name: Build & Upload image to ECR
-        uses: appleboy/docker-ecr-action@master
+      # ✅ AWS credentials (FIX for your error)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-         access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-         secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-         registry: ${{ secrets.REGISTRY }}
-         repo: ${{ env.ECR_REPOSITORY }}
-         region: ${{ env.AWS_REGION }}
-         tags: latest,${{ github.run_number }}
-         daemon_off: false
-         dockerfile: ./Dockerfile
-         context: ./
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
+      # ✅ Login to ECR (FIX for your error)
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ✅ Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t $ECR_REPOSITORY .
+
+      # ✅ Tag Docker image
+      - name: Tag Docker image
+        run: |
+          docker tag $ECR_REPOSITORY:latest \
+          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
+
+      # ✅ Push to ECR
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
